@@ -7,29 +7,29 @@ from wordcloud import WordCloud
 
 st.set_page_config(page_title="TikTok Precision Sentiment Analyzer", layout="wide")
 
-st.title("📊 TikTok Video Sentiment & Perception Analyzer (Akurat)")
-st.write("Aplikasi analisis sentimen berbasis data komentar riil & pemrosesan teks tingkat lanjut.")
+st.title("📊 TikTok Video Sentiment & Perception Analyzer")
+st.write("Analisis sentimen otomatis berbasis file ekspor komentar TikTok (.csv / .xlsx).")
 
-# --- SIDEBAR INPUT PARAMETER ---
+# --- SIDEBAR PARAMETER ---
 st.sidebar.header("🎯 Parameter Objek Analisis")
 profile_name = st.sidebar.text_input("Nama Creator:", "Ko King (Benang Raja)")
 profile_url = st.sidebar.text_input("Link Profil TikTok:", "https://www.tiktok.com/@mr.kingthread")
-video_topic = st.sidebar.text_input("Topik Video:", "Edukasi Transparansi HPP Batik")
+video_topic = st.sidebar.text_input("Topik Video:", "Video Edukasi Transparansi HPP")
 video_url = st.sidebar.text_input("Link Video TikTok:", "https://www.tiktok.com/@mr.kingthread/video/73000000000")
 
 st.sidebar.markdown("---")
 st.sidebar.header("📥 Sumber Data Komentar")
 data_source = st.sidebar.radio(
     "Pilih Sumber Data:",
-    ("Upload File CSV/Excel (Data Komentar Riil)", "Gunakan Data Sampel Uji Coba")
+    ("Upload File CSV/Excel (Hasil Export TikTok)", "Gunakan Data Sampel Uji Coba")
 )
 
-# --- DICTIONARY BAHASA INDONESIA YANG DIPERLUAS ---
+# --- DICTIONARY KATA KUNCI ---
 STOPWORDS = set([
     "yang", "di", "dan", "ini", "itu", "dari", "ke", "ada", "dengan", "saya", 
     "aku", "ya", "gk", "gak", "nggak", "bisa", "untuk", "pada", "adalah", "juga",
     "banget", "pas", "nih", "kok", "sih", "dong", "aja", "biar", "yaaa", "suka",
-    "yg", "dgn", "utk", "sdh", "udah", "aja", "kalo", "kalau", "biar", "pen"
+    "yg", "dgn", "utk", "sdh", "udah", "kalo", "kalau"
 ])
 
 KATA_POSITIF = [
@@ -50,7 +50,6 @@ def analyze_sentiment(text):
     pos_score = sum(1 for w in words if w in KATA_POSITIF)
     neg_score = sum(1 for w in words if w in KATA_NEGATIF)
     
-    # Deteksi Sederhana Negasi (contoh: "tidak murah" / "gak bagus")
     if "gak" in words or "tidak" in words or "nggak" in words:
         if pos_score > neg_score:
             return "Negatif", words
@@ -62,11 +61,10 @@ def analyze_sentiment(text):
     else:
         return "Netral", words
 
-# --- PENANGANAN DATA ---
 comments_data = []
 
-if data_source == "Upload File CSV/Excel (Data Komentar Riil)":
-    uploaded_file = st.file_uploader("Unggah File Komentar (.csv atau .xlsx):", type=["csv", "xlsx"])
+if data_source == "Upload File CSV/Excel (Hasil Export TikTok)":
+    uploaded_file = st.file_uploader("Unggah File Hasil Export (.csv atau .xlsx):", type=["csv", "xlsx"])
     if uploaded_file is not None:
         try:
             if uploaded_file.name.endswith('.csv'):
@@ -74,11 +72,27 @@ if data_source == "Upload File CSV/Excel (Data Komentar Riil)":
             else:
                 df_upload = pd.read_excel(uploaded_file)
             
-            st.write(" Preview Data yang Diunggah:")
-            st.dataframe(df_upload.head(3), width="stretch")
+            # Cari kolom yang namanya mengandung 'comment' secara otomatis
+            default_idx = 0
+            for idx, col in enumerate(df_upload.columns):
+                if 'comment' in col.lower() and 'id' not in col.lower():
+                    default_idx = idx
+                    break
             
-            col_target = st.selectbox("Pilih Kolom yang Berisi Teks Komentar:", df_upload.columns)
-            comments_data = df_upload[col_target].dropna().tolist()
+            col_target = st.selectbox("Pilih Kolom Teks Komentar (Sistem otomatis mendeteksi kolom 'Comment'):", df_upload.columns, index=default_idx)
+            
+            # Bersihkan format Excel formula (misal: ="teks")
+            raw_series = df_upload[col_target].dropna().astype(str)
+            cleaned_list = []
+            for item in raw_series:
+                # Membersihkan format `="teks"` atau tanda kutip sisa export
+                clean_item = re.sub(r'^="?(.*?)"?$', r'\1', item.strip())
+                if clean_item and clean_item.lower() != 'nan':
+                    cleaned_list.append(clean_item)
+            
+            comments_data = cleaned_list
+            st.info(f"Berhasil memuat {len(comments_data)} baris komentar bersih dari file.")
+            
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
 else:
@@ -92,7 +106,6 @@ else:
         "Harganya agak mahal dibanding toko sebelah tapi oke lah."
     ]
 
-# --- DISPLAY HASIL ANALISIS ---
 st.markdown("---")
 st.subheader("📌 Objek Analisis Terdaftar")
 c1, c2 = st.columns(2)
@@ -101,7 +114,7 @@ c2.write(f"**Topik Video:** {video_topic} ([Link Video TikTok]({video_url}))")
 
 if st.button("🚀 Jalankan Analisis Sentimen"):
     if not comments_data:
-        st.warning("Data komentar belum tersedia. Silakan unggah file CSV atau gunakan data sampel.")
+        st.warning("Data komentar belum tersedia. Silakan unggah file CSV hasil export.")
     else:
         sentiments = []
         all_words = []
@@ -115,7 +128,6 @@ if st.button("🚀 Jalankan Analisis Sentimen"):
                     
         st.success(f"Berhasil menganalisis **{len(comments_data)}** data komentar secara presisi!")
         
-        # VISUALISASI HASIL
         col1, col2 = st.columns(2)
         
         with col1:
@@ -136,5 +148,5 @@ if st.button("🚀 Jalankan Analisis Sentimen"):
                 st.pyplot(fig2)
                 
         st.write("### 3. Matriks Hasil Klasifikasi Komentar")
-        df_result = pd.DataFrame({"Komentar Netizen": comments_data, "Hasil Sentimen": sentiments})
+        df_result = pd.DataFrame({"Komentar Bersih Netizen": comments_data, "Hasil Sentimen": sentiments})
         st.dataframe(df_result, width="stretch")
